@@ -182,11 +182,17 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
     // create file on disk
     let mut download_file = File::create(&full_download_path).await?;
 
-    connection
-        .read_file_to_disk(&mut download_file, received_size)
-        .await?; // add progress bar
+    // create progress bar (download)
+    // set max to len of file and operation description
+    let progress_bar = ui::create_progress_bar(received_size, "Downloading ...");
 
-    println!("Download Complete!");
+    connection
+        .read_file_to_disk_with_pb(&mut download_file, received_size, |bytes_read| {
+            progress_bar.inc(bytes_read as u64);
+        })
+        .await?;
+
+    progress_bar.finish_with_message("Download Complete!");
 
     // Verification (Hashing)
     println!("Verifying File Integrity...");
@@ -278,7 +284,7 @@ pub async fn list_files(ip: &str) -> common::Result<()> {
     // Serialise the body
     // JSON string
     let header_json = serde_json::to_string(&file_header)?;
-
+ 
     println!("Sending list request to {ip}...");
 
     // send header via helper
