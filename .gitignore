@@ -23,3 +23,6 @@ target
 # config files
 *config.toml
 **/config.toml
+
+# files for testing
+**/test.txt

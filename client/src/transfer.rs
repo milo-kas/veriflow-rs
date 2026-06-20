@@ -133,13 +133,13 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(VeriflowError::InvalidPath)?;
+        .to_str()
+        .ok_or(VeriflowError::InvalidPath)?
+        .replace("\\", "/");
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Download {
-        name: String::from(file_name),
+        name: file_name.clone(),
     };
 
     // Serialise the body
@@ -167,19 +167,31 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
 
     // Downloading to disk
 
-    // Ensure download dir exists
-    tokio::fs::create_dir_all(download_dir).await?;
+    // // Ensure download dir exists
+    // tokio::fs::create_dir_all(download_dir).await?;
+
     // combine into a single valid path
-    let full_download_path = download_dir.join(file_name);
+    let full_download_path = download_dir.join(&file_name);
+
+    // make sure that the subdirectory exists before creating the file
+    if let Some(parent_dir) = full_download_path.parent() {
+        tokio::fs::create_dir_all(parent_dir).await?;
+    }
 
     // create file on disk
     let mut download_file = File::create(&full_download_path).await?;
 
-    connection
-        .read_file_to_disk(&mut download_file, received_size)
-        .await?; // add progress bar
+    // create progress bar (download)
+    // set max to len of file and operation description
+    let progress_bar = ui::create_progress_bar(received_size, "Downloading ...");
 
-    println!("Download Complete!");
+    connection
+        .read_file_to_disk_with_pb(&mut download_file, received_size, |bytes_read| {
+            progress_bar.inc(bytes_read as u64);
+        })
+        .await?;
+
+    progress_bar.finish_with_message("Download Complete!");
 
     // Verification (Hashing)
     println!("Verifying File Integrity...");
@@ -222,13 +234,13 @@ pub async fn delete_file(path: &Path, ip: &str) -> common::Result<()> {
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(VeriflowError::InvalidPath)?;
+        .to_str()
+        .ok_or(VeriflowError::InvalidPath)?
+        .replace("\\", "/");
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Delete {
-        name: String::from(file_name),
+        name: file_name.clone(),
     };
 
     // Serialise the body
