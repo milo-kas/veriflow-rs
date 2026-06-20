@@ -136,7 +136,6 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
         .to_str()
         .ok_or(VeriflowError::InvalidPath)?
         .replace("\\", "/");
-        
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Download {
@@ -284,7 +283,7 @@ pub async fn list_files(ip: &str) -> common::Result<()> {
     // Serialise the body
     // JSON string
     let header_json = serde_json::to_string(&file_header)?;
- 
+
     println!("Sending list request to {ip}...");
 
     // send header via helper

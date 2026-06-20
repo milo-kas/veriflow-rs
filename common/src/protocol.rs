@@ -173,9 +173,13 @@ impl ProtocolConnection {
         Ok(())
     }
 
-
     /// Streams a file to disk from the network
-    pub async fn read_file_to_disk_with_pb<F>(&mut self, output: &mut File, file_size: u64, mut progress_callback: F) -> Result<()> 
+    pub async fn read_file_to_disk_with_pb<F>(
+        &mut self,
+        output: &mut File,
+        file_size: u64,
+        mut progress_callback: F,
+    ) -> Result<()>
     where
         F: FnMut(usize),
     {
@@ -199,7 +203,7 @@ impl ProtocolConnection {
             // read the chunk from buffer
             self.stream.read_exact(&mut buffer[..bytes_to_read]).await?;
             output.write_all(&buffer[..bytes_to_read]).await?;
-            
+
             // progress bar
             progress_callback(bytes_to_read);
 
