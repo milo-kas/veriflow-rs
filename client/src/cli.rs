@@ -42,16 +42,16 @@ pub enum Commands {
 
     /// Set configuration file values (ip, port, dir)
     Config {
-        /// Set new ip
-        #[arg(short, long)]
-        ip: Option<String>,
+        /// Set new ip / get ip if no value is provided
+        #[arg(short, long, num_args = 0..=1)]
+        ip: Option<Option<String>>,
 
-        /// Set new port
-        #[arg(short, long)]
-        port: Option<String>,
+        /// Set new port / get port if no value is provided
+        #[arg(short, long, num_args = 0..=1)]
+        port: Option<Option<String>>,
 
-        /// Set new download directory
-        #[arg(short, long)]
-        dir: Option<String>,
+        /// Set new download directory / get dir if no value is provided
+        #[arg(short, long, num_args = 0..=1)]
+        dir: Option<Option<String>>,
     },
 }

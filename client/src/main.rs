@@ -21,18 +21,36 @@ async fn main() -> Result<(), VeriflowError> {
     match args.command {
         // Config
         Commands::Config { ip, port, dir } => {
-            if let Some(new_ip) = ip {
-                config.ip = new_ip;
-            }
-            if let Some(new_port) = port {
-                config.port = new_port;
-            }
-            if let Some(new_dir) = dir {
-                config.download_dir = new_dir.into();
+            let mut updated = false;
+
+            macro_rules! handle {
+                ($flag:expr, $field:ident, $display:expr) => {
+                    match $flag {
+                        // flag with value => set
+                        Some(Some(value)) => {
+                            config.$field = value.into();
+                            true
+                        }
+                        // flag with no value => get
+                        Some(None) => {
+                            // use display due to PathBuf
+                            println!("{}", $display);
+                            false
+                        }
+                        // otherwise simply no update or ouput
+                        None => false,
+                    }
+                };
             }
 
-            config.save()?;
-            println!("Configuration saved.")
+            updated |= handle!(ip, ip, config.ip);
+            updated |= handle!(port, port, config.port);
+            updated |= handle!(dir, download_dir, config.download_dir.display());
+
+            if updated {
+                config.save()?;
+                println!("Configuration saved.")
+            }
         }
 
         // Transfer
