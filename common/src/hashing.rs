@@ -54,3 +54,28 @@ where
     // Send back if successful
     Ok(file_hash_hex)
 }
+
+// tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Result;
+    use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_hash_file_with_known_hash() -> Result<()> {
+        // create temp file
+        let temp_file = NamedTempFile::new()?;
+        let test_path = temp_file.path();
+
+        // write data to temp file
+        tokio::fs::write(test_path, "Test data").await?;
+
+        let calculated_hash = hash_file(test_path, |_| {}).await?;
+        let known_hash = "e27c8214be8b7cf5bccc7c08247e3cb0c1514a48ee1f63197fe4ef3ef51d7e6f";
+
+        assert_eq!(calculated_hash, known_hash);
+
+        Ok(())
+    }
+}
