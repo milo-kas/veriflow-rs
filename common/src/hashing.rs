@@ -78,4 +78,19 @@ mod tests {
 
         Ok(())
     }
+
+    // empty file
+    #[tokio::test]
+    async fn test_hash_file_empty() -> Result<()> {
+        // create temp file
+        let temp_file = NamedTempFile::new()?;
+        let test_path = temp_file.path();
+
+        let calculated_hash = hash_file(test_path, |_| {}).await?;
+        let known_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        assert_eq!(calculated_hash, known_hash);
+
+        Ok(())
+    }
 }
