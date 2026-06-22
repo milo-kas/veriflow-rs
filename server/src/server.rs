@@ -3,11 +3,13 @@ use std::io;
 use std::net::SocketAddr;
 use std::path;
 use std::path::{Component, Path, PathBuf};
+use std::str::FromStr;
 use tokio::fs;
 use tokio::fs::metadata;
 use tokio::fs::File;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info};
+use std::string::String;
 ///This struct represents the listener that will handle connections
 pub struct Listener {
     //Struct definition
@@ -116,25 +118,47 @@ impl Listener {
     ///Function to manage the client operations
     async fn handle_operation(
         header: FileHeader,
-        connection: ProtocolConnection,
+        mut connection: ProtocolConnection,
         path: PathBuf,
         addr: SocketAddr,
     ) -> common::Result<()> {
         // Get path
         let path_var = header.path();
-        let safe_path = Self::safe_join(path.as_path(), path_var).await?;
-        info!("User: {:?} has sent a {:?} request.", addr, header);
-        match header {
-            FileHeader::Upload { size, hash, .. } => {
-                Self::handle_upload(connection, safe_path, size, hash, addr).await?
+        let safe_path = match Self::safe_join(path.as_path(), path_var).await{
+            Ok(returned_path) => {
+                returned_path
             }
-            FileHeader::Download { .. } => {
-                Self::handle_download(connection, safe_path, addr).await?
+            Err(_e) => {
+                let error_string = format!("The path {:?} is either an absolute path or contains path traversal which is not allowed",path);
+                let error_fileheader = FileHeader::Error(error_string);
+                let serialized_header = serde_json::to_string(&error_fileheader)?;
+                connection.send_header(&serialized_header).await?;
+                PathBuf::new() 
             }
-            FileHeader::Delete { .. } => Self::handle_delete(connection, safe_path, addr).await?,
-            FileHeader::List => Self::handle_list(connection, safe_path, addr).await?,
-            // Error handling for wrong variants
-            other => return Err(VeriflowError::UnexpectedFileHeader(format!("{:?}", other))),
+        };
+        if Path::new(&safe_path).is_dir() || Path::new(&safe_path).is_file()
+        {
+            info!("User: {:?} has sent a {:?} request.", addr, header);
+            match header {
+                FileHeader::Upload { size, hash, .. } => {
+                    Self::handle_upload(connection, safe_path, size, hash, addr).await?
+                }
+                FileHeader::Download { .. } => {
+                    Self::handle_download(connection, safe_path, addr).await?
+                }
+                FileHeader::Delete { .. } => Self::handle_delete(connection, safe_path, addr).await?,
+                FileHeader::List => Self::handle_list(connection, safe_path, addr).await?,
+                // Error handling for wrong variants
+                other => return Err(VeriflowError::UnexpectedFileHeader(format!("{:?}", other))),
+            }
+        }
+        else{
+            let error_message = String::from_str("The directory/file you have provided does not exist")?;
+            error!("The requested directory/file does not exist");
+            let error_header = FileHeader::Error(error_message);
+            let serialized_header = serde_json::to_string(&error_header)?;
+            connection.send_header(&serialized_header).await?;
+            connection.shutdown().await?;
         }
         Ok(())
     }
