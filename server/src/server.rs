@@ -96,10 +96,12 @@ impl Listener {
     }
     async fn safe_join(base: &Path, user_input: &str) -> common::Result<path::PathBuf> {
         let path = Path::new(user_input);
+        info!("The path is {:?}",path);
         if user_input.is_empty() {
             return Ok(base.to_path_buf());
         }
         if path.is_absolute() {
+            error!("Absolute Path detected: {:?}",path);
             return Err(VeriflowError::Io(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "Absolute path not allowed",
@@ -107,6 +109,7 @@ impl Listener {
         }
         for comp in path.components() {
             if matches!(comp, Component::ParentDir) {
+                error!("Path traversal found!");
                 return Err(VeriflowError::Io(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "Path traversal detected",
@@ -136,6 +139,7 @@ impl Listener {
                 PathBuf::new() 
             }
         };
+        info!("Safe path: {:?}", safe_path);
         if Path::new(&safe_path).is_dir() || Path::new(&safe_path).is_file()
         {
             info!("User: {:?} has sent a {:?} request.", addr, header);
