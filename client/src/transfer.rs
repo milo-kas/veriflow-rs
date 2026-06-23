@@ -16,15 +16,17 @@ use comfy_table::Table;
 /// Helper function for establishing a connection
 async fn connect_to_server(ip: &str) -> common::Result<ProtocolConnection> {
     println!("Connecting to {ip}...");
-    
-    // connect via TCP stream, intercept io::Error for connection VeriflowError 
-    let stream = TcpStream::connect(ip).await.map_err(|e| VeriflowError::ConnectionFailed {
-        ip: ip.to_string(),
-        source: e,
-    })?;
+
+    // connect via TCP stream, intercept io::Error for connection VeriflowError
+    let stream = TcpStream::connect(ip)
+        .await
+        .map_err(|e| VeriflowError::ConnectionFailed {
+            ip: ip.to_string(),
+            source: e,
+        })?;
 
     // move ownership of stream into ProtocolConnection
-    Ok(ProtocolConnection::new(stream).await?)
+    ProtocolConnection::new(stream).await
 }
 
 /// Upload to Server

@@ -66,7 +66,7 @@ pub enum VeriflowError {
     Io(#[from] std::io::Error),
 
     /// Connection Error
-    #[error("Could not connect at {ip}. Details: {source}")]
+    #[error("Could not connect to {ip}. Details: {source}")]
     ConnectionFailed {
         ip: String,
         #[source]

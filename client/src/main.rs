@@ -20,11 +20,7 @@ async fn main() -> Result<(), VeriflowError> {
     // Handle CLI arguments
     match args.command {
         // Config
-        Commands::Config { 
-            ip, 
-            port, 
-            dir 
-        } => {
+        Commands::Config { ip, port, dir } => {
             if let Some(new_ip) = ip {
                 config.ip = new_ip;
             }
@@ -54,20 +50,33 @@ async fn main() -> Result<(), VeriflowError> {
             // Use Some operator for Option
             if let Some(path) = upload {
                 // Upload
-                transfer::upload_file(&path, &target_ip).await?;
+                handle_result(transfer::upload_file(&path, &target_ip).await);
             } else if let Some(path) = download {
                 // Download
-                transfer::download_file(&path, &target_ip, &config.download_dir).await?;
+                handle_result(
+                    transfer::download_file(&path, &target_ip, &config.download_dir).await,
+                );
             } else if let Some(path) = delete {
                 // Delete
-                transfer::delete_file(&path, &target_ip).await?;
+                handle_result(transfer::delete_file(&path, &target_ip).await);
             } else if list {
                 // List
-                transfer::list_files(&target_ip).await?;
+                handle_result(transfer::list_files(&target_ip).await);
             };
 
             println!("Success!");
         }
     }
     Ok(())
+}
+
+// transfer fn wrapper for error handling
+fn handle_result<T>(result: common::Result<T>) -> T {
+    match result {
+        Ok(val) => val,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1)
+        }
+    }
 }
