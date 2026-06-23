@@ -20,7 +20,11 @@ async fn main() -> Result<(), VeriflowError> {
     // Handle CLI arguments
     match args.command {
         // Config
-        Commands::Config { ip, port, dir } => {
+        Commands::Config { 
+            ip, 
+            port, 
+            dir 
+        } => {
             if let Some(new_ip) = ip {
                 config.ip = new_ip;
             }

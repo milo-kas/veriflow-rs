@@ -13,6 +13,20 @@ use tokio::net::TcpStream;
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
+/// Helper function for establishing a connection
+async fn connect_to_server(ip: &str) -> common::Result<ProtocolConnection> {
+    println!("Connecting to {ip}...");
+    
+    // connect via TCP stream, intercept io::Error for connection VeriflowError 
+    let stream = TcpStream::connect(ip).await.map_err(|e| VeriflowError::ConnectionFailed {
+        ip: ip.to_string(),
+        source: e,
+    })?;
+
+    // move ownership of stream into ProtocolConnection
+    Ok(ProtocolConnection::new(stream).await?)
+}
+
 /// Upload to Server
 pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
     // Offline Logic (Validation)
@@ -45,14 +59,8 @@ pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
 
     println!("File Hash: {file_hash}");
 
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Upload {
@@ -122,14 +130,8 @@ pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
 
 /// Download from Server
 pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
@@ -223,14 +225,8 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
 
 /// Delete from Server
 pub async fn delete_file(path: &Path, ip: &str) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
@@ -268,14 +264,8 @@ pub async fn delete_file(path: &Path, ip: &str) -> common::Result<()> {
 
 /// List Server Files
 pub async fn list_files(ip: &str) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::List;
