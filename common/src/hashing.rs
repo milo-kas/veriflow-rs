@@ -93,4 +93,27 @@ mod tests {
 
         Ok(())
     }
+
+    // test if progress bar reports the right progress
+    #[tokio::test]
+    async fn test_hash_file_pb_callback() -> Result<()> {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let mut temp_file = NamedTempFile::new()?;
+        // create a vector of 1MB of data for the 'a' byte
+        let data = vec![b'a'; 1024 * 1024];
+
+        temp_file.write_all(&data)?;
+
+        let counter = AtomicUsize::new(0);
+        hash_file(temp_file.path(), |n| {
+            counter.fetch_add(n, Ordering::SeqCst);
+        })
+        .await?;
+
+        assert_eq!(counter.load(Ordering::SeqCst), data.len());
+
+        Ok(())
+    }
 }
