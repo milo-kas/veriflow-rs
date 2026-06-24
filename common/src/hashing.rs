@@ -54,3 +54,66 @@ where
     // Send back if successful
     Ok(file_hash_hex)
 }
+
+// tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Result;
+    use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_hash_file_with_known_hash() -> Result<()> {
+        // create temp file
+        let temp_file = NamedTempFile::new()?;
+        let test_path = temp_file.path();
+
+        // write data to temp file
+        tokio::fs::write(test_path, "Test data").await?;
+
+        let calculated_hash = hash_file(test_path, |_| {}).await?;
+        let known_hash = "e27c8214be8b7cf5bccc7c08247e3cb0c1514a48ee1f63197fe4ef3ef51d7e6f";
+
+        assert_eq!(calculated_hash, known_hash);
+
+        Ok(())
+    }
+
+    // empty file
+    #[tokio::test]
+    async fn test_hash_file_empty() -> Result<()> {
+        // create temp file
+        let temp_file = NamedTempFile::new()?;
+        let test_path = temp_file.path();
+
+        let calculated_hash = hash_file(test_path, |_| {}).await?;
+        let known_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        assert_eq!(calculated_hash, known_hash);
+
+        Ok(())
+    }
+
+    // test if progress bar reports the right progress
+    #[tokio::test]
+    async fn test_hash_file_pb_callback() -> Result<()> {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let mut temp_file = NamedTempFile::new()?;
+        // create a vector of 1MB of data for the 'a' byte
+        let data = vec![b'a'; 1024 * 1024];
+
+        temp_file.write_all(&data)?;
+
+        let counter = AtomicUsize::new(0);
+        hash_file(temp_file.path(), |n| {
+            counter.fetch_add(n, Ordering::SeqCst);
+        })
+        .await?;
+
+        assert_eq!(counter.load(Ordering::SeqCst), data.len());
+
+        Ok(())
+    }
+}
