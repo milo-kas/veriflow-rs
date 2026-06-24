@@ -302,41 +302,48 @@ pub async fn list_files(ip: &str) -> common::Result<()> {
     // deserialise into Vec<String>
     let path_list: Vec<String> = serde_json::from_slice(&payload_bytes)?;
 
-    // output file tree
-    let mut table = Table::new();
-    table
-        .load_preset(NOTHING)
-        .set_header(vec!["#", "Type", "Path"]);
+    // if empty
+    if path_list.is_empty() {
+        println!("Directory is empty.")
+    }
+    // directory not empty
+    else {
+        // output file tree
+        let mut table = Table::new();
+        table
+            .load_preset(NOTHING)
+            .set_header(vec!["#", "Type", "Path"]);
 
-    // manual counter
-    let mut display_id = 1;
+        // manual counter
+        let mut display_id = 1;
 
-    for path in &path_list {
-        let is_dir = path.ends_with("/");
+        for path in &path_list {
+            let is_dir = path.ends_with("/");
 
-        // filter for empty directories (no other path in the list)
-        if is_dir {
-            let has_children = path_list
-                .iter()
-                .any(|other| other != path && other.starts_with(path));
+            // filter for empty directories (no other path in the list)
+            if is_dir {
+                let has_children = path_list
+                    .iter()
+                    .any(|other| other != path && other.starts_with(path));
 
-            if has_children {
-                continue; // skip directories that contain anything
+                if has_children {
+                    continue; // skip directories that contain anything
+                }
             }
+
+            let type_of = if is_dir { "DIR" } else { "FILE" };
+
+            table.add_row(vec![
+                display_id.to_string(),
+                type_of.to_string(),
+                path.to_string(),
+            ]);
+
+            display_id += 1;
         }
 
-        let type_of = if is_dir { "DIR" } else { "FILE" };
-
-        table.add_row(vec![
-            display_id.to_string(),
-            type_of.to_string(),
-            path.to_string(),
-        ]);
-
-        display_id += 1;
+        println!("\n{table}\n");
     }
-
-    println!("\n{table}\n");
 
     Ok(())
 }
