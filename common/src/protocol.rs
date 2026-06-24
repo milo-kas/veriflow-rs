@@ -174,6 +174,47 @@ impl ProtocolConnection {
     }
     pub async fn shutdown(mut self) -> Result<()> {
         self.stream.shutdown().await?;
+
+    /// Streams a file to disk from the network
+    pub async fn read_file_to_disk_with_pb<F>(
+        &mut self,
+        output: &mut File,
+        file_size: u64,
+        mut progress_callback: F,
+    ) -> Result<()>
+    where
+        F: FnMut(usize),
+    {
+        // Buffer
+        let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+        let mut total_bytes_read: u64 = 0;
+
+        // read file using buffer
+        loop {
+            // check if finished reading the expected file size
+            if total_bytes_read >= file_size {
+                break;
+            }
+
+            // remaining bytes
+            let remaining_bytes: u64 = file_size - total_bytes_read;
+
+            // determine how much is left to read
+            let bytes_to_read: usize = cmp::min(buffer.len() as u64, remaining_bytes) as usize;
+
+            // read the chunk from buffer
+            self.stream.read_exact(&mut buffer[..bytes_to_read]).await?;
+            output.write_all(&buffer[..bytes_to_read]).await?;
+
+            // progress bar
+            progress_callback(bytes_to_read);
+
+            total_bytes_read += bytes_to_read as u64;
+        }
+
+        // flush to make sure that the data is physically written to disk
+        output.flush().await?;
+
         Ok(())
     }
 }

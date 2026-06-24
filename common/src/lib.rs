@@ -68,6 +68,14 @@ pub enum VeriflowError {
     #[error("Network/Disk Error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Connection Error
+    #[error("Could not connect to {ip}. Details: {source}")]
+    ConnectionFailed {
+        ip: String,
+        #[source]
+        source: std::io::Error,
+    },
+
     /// JSON Error
     #[error("Serialisation Error: {0}")]
     JSON(#[from] serde_json::Error),

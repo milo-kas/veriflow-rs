@@ -13,6 +13,22 @@ use tokio::net::TcpStream;
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
+/// Helper function for establishing a connection
+async fn connect_to_server(ip: &str) -> common::Result<ProtocolConnection> {
+    println!("Connecting to {ip}...");
+
+    // connect via TCP stream, intercept io::Error for connection VeriflowError
+    let stream = TcpStream::connect(ip)
+        .await
+        .map_err(|e| VeriflowError::ConnectionFailed {
+            ip: ip.to_string(),
+            source: e,
+        })?;
+
+    // move ownership of stream into ProtocolConnection
+    ProtocolConnection::new(stream).await
+}
+
 /// Upload to Server
 pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
     // Offline Logic (Validation)
@@ -45,14 +61,8 @@ pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
 
     println!("File Hash: {file_hash}");
 
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Upload {
@@ -122,24 +132,18 @@ pub async fn upload_file(path: &Path, ip: &str) -> common::Result<()> {
 
 /// Download from Server
 pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(VeriflowError::InvalidPath)?;
+        .to_str()
+        .ok_or(VeriflowError::InvalidPath)?
+        .replace("\\", "/");
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Download {
-        name: String::from(file_name),
+        name: file_name.clone(),
     };
 
     // Serialise the body
@@ -167,19 +171,31 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
 
     // Downloading to disk
 
-    // Ensure download dir exists
-    tokio::fs::create_dir_all(download_dir).await?;
+    // // Ensure download dir exists
+    // tokio::fs::create_dir_all(download_dir).await?;
+
     // combine into a single valid path
-    let full_download_path = download_dir.join(file_name);
+    let full_download_path = download_dir.join(&file_name);
+
+    // make sure that the subdirectory exists before creating the file
+    if let Some(parent_dir) = full_download_path.parent() {
+        tokio::fs::create_dir_all(parent_dir).await?;
+    }
 
     // create file on disk
     let mut download_file = File::create(&full_download_path).await?;
 
-    connection
-        .read_file_to_disk(&mut download_file, received_size)
-        .await?; // add progress bar
+    // create progress bar (download)
+    // set max to len of file and operation description
+    let progress_bar = ui::create_progress_bar(received_size, "Downloading ...");
 
-    println!("Download Complete!");
+    connection
+        .read_file_to_disk_with_pb(&mut download_file, received_size, |bytes_read| {
+            progress_bar.inc(bytes_read as u64);
+        })
+        .await?;
+
+    progress_bar.finish_with_message("Download Complete!");
 
     // Verification (Hashing)
     println!("Verifying File Integrity...");
@@ -211,24 +227,18 @@ pub async fn download_file(path: &Path, ip: &str, download_dir: &Path) -> common
 
 /// Delete from Server
 pub async fn delete_file(path: &Path, ip: &str) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // get file name -- Strict error handling (Allow ONLY UTF-8 characters)
     let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(VeriflowError::InvalidPath)?;
+        .to_str()
+        .ok_or(VeriflowError::InvalidPath)?
+        .replace("\\", "/");
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::Delete {
-        name: String::from(file_name),
+        name: file_name.clone(),
     };
 
     // Serialise the body
@@ -256,14 +266,8 @@ pub async fn delete_file(path: &Path, ip: &str) -> common::Result<()> {
 
 /// List Server Files
 pub async fn list_files(ip: &str) -> common::Result<()> {
-    // Connect to server
-    println!("Connecting to {ip}...");
-
-    // connect via TCP stream
-    let stream = TcpStream::connect(ip).await?;
-
-    // move ownership of stream into ProtocolConnection
-    let mut connection = ProtocolConnection::new(stream).await?;
+    // connect to server
+    let mut connection = connect_to_server(ip).await?;
 
     // Setup FileHeader
     let file_header: FileHeader = FileHeader::List;
@@ -298,41 +302,48 @@ pub async fn list_files(ip: &str) -> common::Result<()> {
     // deserialise into Vec<String>
     let path_list: Vec<String> = serde_json::from_slice(&payload_bytes)?;
 
-    // output file tree
-    let mut table = Table::new();
-    table
-        .load_preset(NOTHING)
-        .set_header(vec!["#", "Type", "Path"]);
+    // if empty
+    if path_list.is_empty() {
+        println!("Directory is empty.")
+    }
+    // directory not empty
+    else {
+        // output file tree
+        let mut table = Table::new();
+        table
+            .load_preset(NOTHING)
+            .set_header(vec!["#", "Type", "Path"]);
 
-    // manual counter
-    let mut display_id = 1;
+        // manual counter
+        let mut display_id = 1;
 
-    for path in &path_list {
-        let is_dir = path.ends_with("/");
+        for path in &path_list {
+            let is_dir = path.ends_with("/");
 
-        // filter for empty directories (no other path in the list)
-        if is_dir {
-            let has_children = path_list
-                .iter()
-                .any(|other| other != path && other.starts_with(path));
+            // filter for empty directories (no other path in the list)
+            if is_dir {
+                let has_children = path_list
+                    .iter()
+                    .any(|other| other != path && other.starts_with(path));
 
-            if has_children {
-                continue; // skip directories that contain anything
+                if has_children {
+                    continue; // skip directories that contain anything
+                }
             }
+
+            let type_of = if is_dir { "DIR" } else { "FILE" };
+
+            table.add_row(vec![
+                display_id.to_string(),
+                type_of.to_string(),
+                path.to_string(),
+            ]);
+
+            display_id += 1;
         }
 
-        let type_of = if is_dir { "DIR" } else { "FILE" };
-
-        table.add_row(vec![
-            display_id.to_string(),
-            type_of.to_string(),
-            path.to_string(),
-        ]);
-
-        display_id += 1;
+        println!("\n{table}\n");
     }
-
-    println!("\n{table}\n");
 
     Ok(())
 }

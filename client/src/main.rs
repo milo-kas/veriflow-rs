@@ -21,18 +21,36 @@ async fn main() -> Result<(), VeriflowError> {
     match args.command {
         // Config
         Commands::Config { ip, port, dir } => {
-            if let Some(new_ip) = ip {
-                config.ip = new_ip;
-            }
-            if let Some(new_port) = port {
-                config.port = new_port;
-            }
-            if let Some(new_dir) = dir {
-                config.download_dir = new_dir.into();
+            let mut updated = false;
+
+            macro_rules! handle {
+                ($flag:expr, $field:ident, $display:expr) => {
+                    match $flag {
+                        // flag with value => set
+                        Some(Some(value)) => {
+                            config.$field = value.into();
+                            true
+                        }
+                        // flag with no value => get
+                        Some(None) => {
+                            // use display due to PathBuf
+                            println!("{}", $display);
+                            false
+                        }
+                        // otherwise simply no update or ouput
+                        None => false,
+                    }
+                };
             }
 
-            config.save()?;
-            println!("Configuration saved.")
+            updated |= handle!(ip, ip, config.ip);
+            updated |= handle!(port, port, config.port);
+            updated |= handle!(dir, download_dir, config.download_dir.display());
+
+            if updated {
+                config.save()?;
+                println!("Configuration saved.")
+            }
         }
 
         // Transfer
@@ -50,20 +68,33 @@ async fn main() -> Result<(), VeriflowError> {
             // Use Some operator for Option
             if let Some(path) = upload {
                 // Upload
-                transfer::upload_file(&path, &target_ip).await?;
+                handle_result(transfer::upload_file(&path, &target_ip).await);
             } else if let Some(path) = download {
                 // Download
-                transfer::download_file(&path, &target_ip, &config.download_dir).await?;
+                handle_result(
+                    transfer::download_file(&path, &target_ip, &config.download_dir).await,
+                );
             } else if let Some(path) = delete {
                 // Delete
-                transfer::delete_file(&path, &target_ip).await?;
+                handle_result(transfer::delete_file(&path, &target_ip).await);
             } else if list {
                 // List
-                transfer::list_files(&target_ip).await?;
+                handle_result(transfer::list_files(&target_ip).await);
             };
 
             println!("Success!");
         }
     }
     Ok(())
+}
+
+// transfer fn wrapper for error handling
+fn handle_result<T>(result: common::Result<T>) -> T {
+    match result {
+        Ok(val) => val,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1)
+        }
+    }
 }
