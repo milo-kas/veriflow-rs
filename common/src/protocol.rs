@@ -174,6 +174,8 @@ impl ProtocolConnection {
     }
     pub async fn shutdown(mut self) -> Result<()> {
         self.stream.shutdown().await?;
+        Ok(())
+    }
 
     /// Streams a file to disk from the network
     pub async fn read_file_to_disk_with_pb<F>(
