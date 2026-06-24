@@ -67,3 +67,17 @@ impl ClientConfig {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = ClientConfig::default();
+
+        assert_eq!(config.ip, "127.0.0.1");
+        assert_eq!(config.port, "8080");
+        assert_eq!(config.download_dir, PathBuf::from("../Veriflow/Downloads"));
+    }
+}
