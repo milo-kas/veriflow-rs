@@ -80,4 +80,13 @@ mod tests {
         assert_eq!(config.port, "8080");
         assert_eq!(config.download_dir, PathBuf::from("../Veriflow/Downloads"));
     }
+
+    #[test]
+    fn test_full_address_getter() {
+        let mut config = ClientConfig::default();
+        config.ip = "10001".to_string();
+        config.port = "576".to_string();
+
+        assert_eq!(config.address(), "10001:576");
+    }
 }
