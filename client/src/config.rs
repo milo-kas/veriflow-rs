@@ -2,7 +2,7 @@
 
 use common::VeriflowError;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Config Struct
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,7 +25,6 @@ impl Default for ClientConfig {
 }
 
 impl ClientConfig {
-
     pub fn save(&self) -> Result<(), VeriflowError> {
         self.save_to(Path::new("config.toml")) // default path
     }
@@ -62,7 +61,6 @@ impl ClientConfig {
             }
         };
 
-
         // Parse the TOML
         match toml::from_str(&config_str) {
             Ok(config) => config,
@@ -74,9 +72,6 @@ impl ClientConfig {
         }
     }
 
-    
-
-
     // Helper function for full address (ip + port)
     pub fn address(&self) -> String {
         format!("{}:{}", self.ip, self.port)
@@ -86,6 +81,7 @@ impl ClientConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_default_config() {
@@ -105,4 +101,31 @@ mod tests {
         assert_eq!(config.address(), "10001:576");
     }
 
+    #[test]
+    fn test_save_and_load_custom_path() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("random123.toml");
+
+        let test_ip = "164.100.1.1".to_string();
+        let test_port = "4040".to_string();
+        let test_download_dir = PathBuf::from("tmp/some dir");
+
+        // set custom config
+        let config = ClientConfig {
+            ip: test_ip,
+            port: test_port,
+            download_dir: test_download_dir,
+        };
+
+        // save
+        config.save_to(&config_path)?;
+
+        // load
+        let loaded_config = ClientConfig::load_from(&config_path);
+        assert_eq!(loaded_config.ip, config.ip);
+        assert_eq!(loaded_config.port, config.port);
+        assert_eq!(loaded_config.download_dir, config.download_dir);
+
+        Ok(())
+    }
 }
