@@ -25,9 +25,28 @@ impl Default for ClientConfig {
 }
 
 impl ClientConfig {
+
+    pub fn save(&self) -> Result<(), VeriflowError> {
+        self.save_to(Path::new("config.toml")) // default path
+    }
+
+    // save configuration to path
+    pub fn save_to(&self, path: &Path) -> Result<(), VeriflowError> {
+        let toml_str = toml::to_string_pretty(self)?;
+
+        std::fs::write(path, toml_str)?;
+
+        Ok(())
+    }
+
     pub fn load() -> Self {
+        Self::load_from(Path::new("config.toml")) // default path
+    }
+
+    // load configuration from path
+    pub fn load_from(path: &Path) -> Self {
         // Attempt to read the file
-        let config_str = match std::fs::read_to_string("config.toml") {
+        let config_str = match std::fs::read_to_string(path) {
             Ok(content) => content,
             // Cant read file / no file found
             Err(_) => {
@@ -37,11 +56,12 @@ impl ClientConfig {
                 let default_config = Self::default();
 
                 // create new config file
-                let _ = default_config.save();
+                let _ = default_config.save_to(path);
 
                 return default_config;
             }
         };
+
 
         // Parse the TOML
         match toml::from_str(&config_str) {
@@ -54,17 +74,12 @@ impl ClientConfig {
         }
     }
 
+    
+
+
     // Helper function for full address (ip + port)
     pub fn address(&self) -> String {
         format!("{}:{}", self.ip, self.port)
-    }
-
-    pub fn save(&self) -> Result<(), VeriflowError> {
-        let toml_str = toml::to_string_pretty(self)?;
-
-        std::fs::write("config.toml", toml_str)?;
-
-        Ok(())
     }
 }
 
@@ -89,4 +104,5 @@ mod tests {
 
         assert_eq!(config.address(), "10001:576");
     }
+
 }
