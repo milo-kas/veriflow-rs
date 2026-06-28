@@ -137,7 +137,7 @@ impl Listener {
         let safe_path = match Self::safe_join(path.as_path(), path_var).await {
             Ok(returned_path) => returned_path,
             Err(_e) => {
-                let error_string = format!("The path provided is either an absolute path, contains path traversal or is trying to reference the current directory which is not allowed").to_string();
+                let error_string = "The path provided is either an absolute path, contains path traversal or is trying to reference the current directory which is not allowed".to_string();
                 let error_fileheader = FileHeader::Error(error_string);
                 let serialized_header = serde_json::to_string(&error_fileheader)?;
                 connection.send_header(&serialized_header).await?;
