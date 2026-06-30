@@ -61,6 +61,9 @@ impl FileHeader {
 // Error Type Struct for wrapping errors
 #[derive(Error, Debug)]
 pub enum VeriflowError {
+    /// String Error
+    #[error("String Conversion Error: {0}")]
+    String(#[from] std::string::ParseError),
     /// IO Error
     #[error("Network/Disk Error: {0}")]
     Io(#[from] std::io::Error),

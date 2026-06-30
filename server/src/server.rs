@@ -1,7 +1,10 @@
 use common::{hashing, protocol::ProtocolConnection, FileHeader, VeriflowError};
 use std::io;
+use std::net::SocketAddr;
 use std::path;
 use std::path::{Component, Path, PathBuf};
+use std::str::FromStr;
+use std::string::String;
 use tokio::fs;
 use tokio::fs::metadata;
 use tokio::fs::File;
@@ -64,16 +67,15 @@ impl Listener {
             match self.listener.accept().await {
                 //when a connection is made we deal with it below
                 Ok((mut _stream, addr)) => {
-                    info!("User {} has connected.", addr,);
                     let connection = ProtocolConnection::new(_stream).await?;
                     let dir = path.clone();
                     tokio::spawn(async move {
-                        let _ = Self::handle_client(connection, dir).await;
+                        let _ = Self::handle_client(connection, addr, dir).await;
                     });
                 }
 
                 Err(e) => error!(
-                    "The following error has occured while trying to connect to the client: {}",
+                    "The following error has occured while trying to accept the client connection: {}",
                     e
                 ),
             }
@@ -82,21 +84,24 @@ impl Listener {
     ///Used to concurrently handle clients
     async fn handle_client(
         mut connection: ProtocolConnection,
+        addr: SocketAddr,
         path: PathBuf,
     ) -> common::Result<()> {
         let prefix_len = connection.read_prefix().await?;
         let header: Vec<u8> = connection.read_body(prefix_len).await?;
         let string_header = String::from_utf8_lossy(&header);
         let file_header: FileHeader = serde_json::from_str(&string_header)?;
-        Self::handle_operation(file_header, connection, path).await?;
+        Self::handle_operation(file_header, connection, path, addr).await?;
         Ok(())
     }
     async fn safe_join(base: &Path, user_input: &str) -> common::Result<path::PathBuf> {
         let path = Path::new(user_input);
+        info!("The path is {:?}", path);
         if user_input.is_empty() {
             return Ok(base.to_path_buf());
         }
         if path.is_absolute() {
+            error!("Absolute Path detected: {:?}", path);
             return Err(VeriflowError::Io(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "Absolute path not allowed",
@@ -104,9 +109,17 @@ impl Listener {
         }
         for comp in path.components() {
             if matches!(comp, Component::ParentDir) {
+                error!("Path traversal found!");
                 return Err(VeriflowError::Io(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "Path traversal detected",
+                )));
+            }
+            if matches!(comp, Component::CurDir) {
+                error!("Current directory reference found!");
+                return Err(VeriflowError::Io(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "Current directory reference detected",
                 )));
             }
         }
@@ -115,22 +128,59 @@ impl Listener {
     ///Function to manage the client operations
     async fn handle_operation(
         header: FileHeader,
-        connection: ProtocolConnection,
+        mut connection: ProtocolConnection,
         path: PathBuf,
+        addr: SocketAddr,
     ) -> common::Result<()> {
         // Get path
         let path_var = header.path();
-        let safe_path = Self::safe_join(path.as_path(), path_var).await?;
+        let safe_path = match Self::safe_join(path.as_path(), path_var).await {
+            Ok(returned_path) => returned_path,
+            Err(_e) => {
+                let error_string = "The path provided is either an absolute path, contains path traversal or is trying to reference the current directory which is not allowed".to_string();
+                let error_fileheader = FileHeader::Error(error_string);
+                let serialized_header = serde_json::to_string(&error_fileheader)?;
+                connection.send_header(&serialized_header).await?;
 
-        match header {
-            FileHeader::Upload { size, hash, .. } => {
-                Self::handle_upload(connection, safe_path, size, hash).await?
+                connection.shutdown().await?;
+                return Ok(());
             }
-            FileHeader::Download { .. } => Self::handle_download(connection, safe_path).await?,
-            FileHeader::Delete { .. } => Self::handle_delete(connection, safe_path).await?,
-            FileHeader::List => Self::handle_list(connection, safe_path).await?,
-            // Error handling for wrong variants
-            other => return Err(VeriflowError::UnexpectedFileHeader(format!("{:?}", other))),
+        };
+        info!("Safe path: {:?}", safe_path);
+        if Path::new(&safe_path).is_file()
+            || matches!(header, FileHeader::Upload { .. })
+            || matches!(header, FileHeader::List)
+        {
+            info!("User: {:?} has sent a {:?} request.", addr, header);
+            match header {
+                FileHeader::Upload { size, hash, .. } => {
+                    Self::handle_upload(connection, safe_path, size, hash, addr).await?
+                }
+                FileHeader::Download { .. } => {
+                    Self::handle_download(connection, safe_path, addr).await?
+                }
+                FileHeader::Delete { .. } => {
+                    Self::handle_delete(connection, safe_path, addr).await?
+                }
+                FileHeader::List => Self::handle_list(connection, safe_path, addr).await?,
+                // Error handling for wrong variants
+                other => return Err(VeriflowError::UnexpectedFileHeader(format!("{:?}", other))),
+            }
+        } else if Path::new(&safe_path).is_dir() {
+            let error_message =
+                String::from_str("You have provided a directory which is not allowed")?;
+            error!("A directory has been provided instead of a file path, this is not allowed");
+            let error_header = FileHeader::Error(error_message);
+            let serialized_header = serde_json::to_string(&error_header)?;
+            connection.send_header(&serialized_header).await?;
+            connection.shutdown().await?;
+        } else {
+            let error_message = String::from_str("The path provided does not exist")?;
+            error!("The path provided does not exist");
+            let error_header = FileHeader::Error(error_message);
+            let serialized_header = serde_json::to_string(&error_header)?;
+            connection.send_header(&serialized_header).await?;
+            connection.shutdown().await?;
         }
         Ok(())
     }
@@ -140,6 +190,7 @@ impl Listener {
         path: PathBuf,
         size: u64,
         expected_hash: String,
+        addr: SocketAddr,
     ) -> common::Result<()> {
         let mut received_file = File::create(&path).await?;
         connection
@@ -154,17 +205,29 @@ impl Listener {
             let str_header = serde_json::to_string(&header)?;
             connection.send_header(&str_header).await?;
         } else {
-            info!("File successfuly received");
+            info!(
+                "File: {:?} successfuly received from User {:?}",
+                path.as_path().file_name(),
+                addr
+            );
             let header = FileHeader::Success("File uploaded successfully!".to_string());
             let str_header = serde_json::to_string(&header)?;
-            connection.send_header(&str_header).await?;
+            let _success = match connection.send_header(&str_header).await {
+                Ok(_) => true,
+                Err(e) => {
+                    error!("Failed to send header: {:?}", e);
+                    false
+                }
+            };
         }
+        connection.shutdown().await?;
         Ok(())
     }
     ///Handles a clients' download request
     async fn handle_download(
         mut connection: ProtocolConnection,
         path: PathBuf,
+        addr: SocketAddr,
     ) -> common::Result<()> {
         // Extract filename from PathBuf
         let filename = path
@@ -172,29 +235,60 @@ impl Listener {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "download".to_string());
 
-        let mut file_to_send = File::open(&path.as_path()).await?;
+        let mut file_to_send = match File::open(&path.as_path()).await {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to open file: {:?}", e);
+                return Err(VeriflowError::Io(e));
+            }
+        };
         let file_meta_data = fs::metadata(&path.as_path()).await?;
         let file_size = file_meta_data.len();
         let file_hash = hashing::hash_file(path.as_path(), |_| {}).await?; // use saved .sha256 sidecar file in future
 
         let file_header = FileHeader::Upload {
-            name: filename,
+            name: filename.clone(),
             size: file_size,
             hash: file_hash,
         };
 
-        let serialized_header = serde_json::to_string(&file_header)?;
-        connection.send_header(&serialized_header).await?;
-        connection
+        let serialized_header = match serde_json::to_string(&file_header) {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to serialize file header: {:?}", e);
+                return Err(VeriflowError::JSON(e));
+            }
+        };
+        let mut _success = match connection.send_header(&serialized_header).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Failed to send header: {:?}", e);
+                false
+            }
+        };
+        _success = match connection
             .write_file_to_stream(&mut file_to_send, file_size)
-            .await?;
+            .await
+        {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Failed to write file to stream: {:?}", e);
+                false
+            }
+        };
+        info!("{:?} has been sent to user {:?}", filename, addr);
+        connection.shutdown().await?;
         Ok(())
     }
 
     ///Handles a list command request
     ///
     /// No return but it walks the resource directory and sends its contents together with the subdirectories to the client
-    async fn handle_list(mut connection: ProtocolConnection, path: PathBuf) -> common::Result<()> {
+    async fn handle_list(
+        mut connection: ProtocolConnection,
+        path: PathBuf,
+        addr: SocketAddr,
+    ) -> common::Result<()> {
         let mut stack = vec![path.clone()];
         let mut path_list = vec![];
         while let Some(dir) = stack.pop() {
@@ -209,30 +303,64 @@ impl Listener {
                     let str_path = relative.to_string_lossy().replace("\\", "/");
                     path_list.push(str_path);
                 } else if file_type.is_dir() {
+                    let mut dir_to_check = fs::read_dir(entry_path.clone()).await?;
+                    let check_next = dir_to_check.next_entry().await?;
+                    if check_next.is_none() {
+                        let relative = entry_path.strip_prefix(&path).unwrap_or(&entry_path);
+                        // linux formatting and append '/' to the end to imply directory
+                        let str_path =
+                            format!("{}/", relative.to_string_lossy().replace("\\", "/"));
+                        path_list.push(str_path);
+                    }
                     stack.push(entry_path);
                 }
             }
         }
         info!("{:?}", path_list);
-        let payload = serde_json::to_vec(&path_list)?;
+        let payload = match serde_json::to_vec(&path_list) {
+            Ok(p) => p,
+            Err(e) => {
+                error!("Failed to serialize payload: {:?}", e);
+                return Err(VeriflowError::JSON(e));
+            }
+        };
         let payload_header = FileHeader::Upload {
             name: "list".to_string(),
             size: payload.len() as u64,
             hash: String::new(),
         };
-        let str_header = serde_json::to_string(&payload_header)?;
-        connection.send_header(&str_header).await?;
-        connection.send_data(&payload).await?;
+        let str_header = match serde_json::to_string(&payload_header) {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to serialize payload header: {:?}", e);
+                return Err(VeriflowError::JSON(e));
+            }
+        };
+        let mut _success = match connection.send_header(&str_header).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Failed to send header: {:?}", e);
+                false
+            }
+        };
+        let mut _success = match connection.send_data(&payload).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Failed to send data: {:?}", e);
+                false
+            }
+        };
+        info!("List successfully sent to user {:?}", addr);
+        connection.shutdown().await?;
         Ok(())
     }
     ///Handles a delete request
     pub async fn handle_delete(
         mut connection: ProtocolConnection,
         path: PathBuf,
+        addr: SocketAddr,
     ) -> common::Result<()> {
-        info!("{:?}", &path);
         let md = metadata(&path).await?;
-
         // combine the fs::remove logic for directories and files
         let result = if md.is_dir() {
             fs::remove_dir_all(&path).await
@@ -242,14 +370,33 @@ impl Listener {
 
         let response_header = match result {
             Ok(()) => {
+                info!(
+                    "Path: {:?} has been successfully deleted as per Users: {:?} request",
+                    path, addr
+                );
                 FileHeader::Success("Successfully deleted the requested file/folder".to_string())
             }
-            Err(e) => FileHeader::Error(format!("Failed to delete: {e}")),
+            Err(e) => {
+                error!("Path {:?} has not been deleted due to error {:?}", path, e);
+                FileHeader::Error(format!("Failed to delete: {e}"))
+            }
         };
 
-        let str_header = serde_json::to_string(&response_header)?;
-        connection.send_header(&str_header).await?;
-
+        let str_header = match serde_json::to_string(&response_header) {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to serialize response header: {:?}", e);
+                return Err(VeriflowError::JSON(e));
+            }
+        };
+        let _success = match connection.send_header(&str_header).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Failed to send header: {:?}", e);
+                false
+            }
+        };
+        connection.shutdown().await?;
         Ok(())
     }
     ///Accept a single tcp connection
