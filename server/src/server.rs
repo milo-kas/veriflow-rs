@@ -307,7 +307,9 @@ impl Listener {
                     let check_next = dir_to_check.next_entry().await?;
                     if check_next.is_none() {
                         let relative = entry_path.strip_prefix(&path).unwrap_or(&entry_path);
-                        let str_path = relative.to_string_lossy().replace("\\", "/");
+                        // linux formatting and append '/' to the end to imply directory
+                        let str_path =
+                            format!("{}/", relative.to_string_lossy().replace("\\", "/"));
                         path_list.push(str_path);
                     }
                     stack.push(entry_path);
@@ -358,17 +360,6 @@ impl Listener {
         path: PathBuf,
         addr: SocketAddr,
     ) -> common::Result<()> {
-        if metadata(&path).await.is_err() {
-            let file_name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or(VeriflowError::InvalidPath)?;
-            FileHeader::Error(format!(
-                "Failed to delete file: {file_name} as it is not found within the directory"
-            ));
-            error!("The file could not be deleted!");
-            return Ok(());
-        }
         let md = metadata(&path).await?;
         // combine the fs::remove logic for directories and files
         let result = if md.is_dir() {
