@@ -141,7 +141,9 @@ impl Listener {
                 let error_fileheader = FileHeader::Error(error_string);
                 let serialized_header = serde_json::to_string(&error_fileheader)?;
                 connection.send_header(&serialized_header).await?;
-                PathBuf::new()
+
+                connection.shutdown().await?;
+                return Ok(());
             }
         };
         info!("Safe path: {:?}", safe_path);
