@@ -158,4 +158,20 @@ mod tests {
         assert_eq!(config.download_dir, default.download_dir);
         Ok(())
     }
+
+    #[test]
+    fn test_load_from_missing_config_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let path = dir.path().join("config.toml");
+        // verify the file does not exist
+        assert!(!path.exists());
+
+        let config = ClientConfig::load_from(&path);
+        let default = ClientConfig::default();
+
+        assert_eq!(config.ip, default.ip);
+        assert_eq!(config.port, default.port);
+        assert_eq!(config.download_dir, default.download_dir);
+        Ok(())
+    }
 }
