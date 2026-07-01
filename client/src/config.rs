@@ -143,4 +143,19 @@ mod tests {
         assert_eq!(config.download_dir, default.download_dir);
         Ok(())
     }
+
+    #[test]
+    fn test_load_from_partial_toml() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "ip = \"164.100.1.1\"")?;
+
+        let config = ClientConfig::load_from(&path);
+        let default = ClientConfig::default();
+
+        assert_eq!(config.ip, "164.100.1.1");
+        assert_eq!(config.port, default.port);
+        assert_eq!(config.download_dir, default.download_dir);
+        Ok(())
+    }
 }
