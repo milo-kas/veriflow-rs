@@ -3,14 +3,13 @@ use std::path::PathBuf;
 use server::{server::Listener, Config, Directory, Network};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[tokio::main]
+
 async fn main() -> common::Result<()> {
-    const FILE_PATH: &str = "../Veriflow/resources/";
-    const CONFIG_PATH: &str = "./config.toml";
-    let config_exists = tokio::fs::try_exists(CONFIG_PATH).await?;
+    let config_exists = tokio::fs::try_exists(server::CONFIG_PATH).await?;
     if !config_exists {
-        let path_exists = tokio::fs::try_exists(FILE_PATH).await?;
+        let path_exists = tokio::fs::try_exists(server::FILE_PATH).await?;
         if !path_exists {
-            tokio::fs::create_dir_all(FILE_PATH).await?;
+            tokio::fs::create_dir_all(server::FILE_PATH).await?;
         }
         let config_content: Config = Config {
             network: (Network {
@@ -18,20 +17,20 @@ async fn main() -> common::Result<()> {
                 port: "8080".to_string(),
             }),
             directory: (Directory {
-                path: PathBuf::from(FILE_PATH),
+                path: PathBuf::from(server::FILE_PATH),
             }),
         };
-        let _ = tokio::fs::File::create(CONFIG_PATH).await?;
+        let _ = tokio::fs::File::create(server::CONFIG_PATH).await?;
         let mut config_file = tokio::fs::OpenOptions::new()
             .write(true)
             .truncate(true)
-            .open(CONFIG_PATH)
+            .open(server::CONFIG_PATH)
             .await?;
         let string_content = toml::to_string(&config_content)?;
         config_file.write_all(string_content.as_bytes()).await?;
         config_file.flush().await?;
     }
-    let mut config_file = tokio::fs::File::open(CONFIG_PATH).await?;
+    let mut config_file = tokio::fs::File::open(server::CONFIG_PATH).await?;
     let mut content = String::new();
     config_file.read_to_string(&mut content).await?;
     let config_struct: Config = toml::from_str(&content)?;

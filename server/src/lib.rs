@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 pub mod server;
 
+pub const FILE_PATH: &str = "../Veriflow/resources/";
+pub const CONFIG_PATH: &str = "./config.toml";
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
     pub network: Network,
@@ -19,20 +21,23 @@ pub struct Directory {
 }
 #[cfg(test)]
 mod test {
-    use crate::server::Listener;
+    use std::path::PathBuf;
+
+use crate::FILE_PATH;
+use crate::server::Listener;
     pub use common::protocol::ProtocolConnection;
     pub use common::FileHeader;
     use tokio::net::TcpStream;
     #[tokio::test]
     async fn test_protocol_read_and_write(
-    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> common::Result<()> {
         //made to avoid veriflow error
-        type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+        
         //creates a server
-        let mut server = Listener::new("127.0.0.1", "0").await?;
-        let addr = server.local_addr()?;
-        let server_task: tokio::task::JoinHandle<AnyResult<()>> = tokio::spawn(async move {
-            let stream = server.accept_once().await?;
+        let mut listener = Listener::new("127.0.0.1", "0").await?;
+        let addr = listener.local_addr()?;
+        let server_task: tokio::task::JoinHandle<common::Result<()>> = tokio::spawn(async move {
+            let stream = listener.accept_once().await?;
             let mut conn = ProtocolConnection::new(stream).await?;
 
             let len = conn.read_prefix().await?;
@@ -68,20 +73,22 @@ mod test {
         Ok(())
     }
 
-    async fn test_server_upload() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
-        let mut server = Listener::new("127.0.0.1", "0").await?;
-        let addr = server.local_addr()?;
-        let server_task: tokio::task::JoinHandle<AnyResult<()>> = tokio::spawn(async move {
-        let stream = server.accept_once().await?;
+    async fn test_server_upload() -> common::Result<()> {
+        /// Test of the server upload functionality
+        let mut listener = Listener::new("127.0.0.1", "0").await?;
+        let addr = listener.local_addr()?;
+        let server_task: tokio::task::JoinHandle<common::Result<()>> = tokio::spawn(async move {
+        let stream = listener.accept_once().await?;
             let mut conn = ProtocolConnection::new(stream).await?;
 
-            let len = conn.read_prefix().await?;
-            let body = conn.read_body(len).await?;
-            conn.send_header(&String::from_utf8_lossy(&body)).await?;
+            Listener::handle_client(conn, addr, PathBuf::from(FILE_PATH)).await?;
 
             Ok(())
-        });
+        }); 
+        let stream = TcpStream::connect(addr).await?;
+        let mut connection = ProtocolConnection::new(stream).await?;
+        let file_path = "./test_files/images.jfif";
+
         Ok(())
     }
 }

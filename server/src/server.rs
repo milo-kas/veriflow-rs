@@ -82,7 +82,7 @@ impl Listener {
         }
     }
     ///Used to concurrently handle clients
-    async fn handle_client(
+    pub async fn handle_client(
         mut connection: ProtocolConnection,
         addr: SocketAddr,
         path: PathBuf,
