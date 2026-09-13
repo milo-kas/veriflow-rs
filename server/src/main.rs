@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use server::{cli::Args, cli::Commands, config::Config, server::Listener};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[tokio::main]
 
 async fn main() -> common::Result<()> {
@@ -12,20 +11,14 @@ async fn main() -> common::Result<()> {
             let config_exists = tokio::fs::try_exists(server::CONFIG_PATH).await?;
             if config_exists {
                 let mut config = Config::load_from_file().await?;
-                if let Some(ip_value) = ip {
-                    if let Some(ip_str) = ip_value {
-                        config.network.ip = ip_str;
-                    }
+                if let Some(ip_str) = ip.flatten() {
+                    config.network.ip = ip_str;
                 }
-                if let Some(port_value) = port {
-                    if let Some(port_str) = port_value {
-                        config.network.port = port_str;
-                    }
+                if let Some(port_str) = port.flatten() {
+                    config.network.port = port_str;
                 }
-                if let Some(dir_value) = dir {
-                    if let Some(dir_str) = dir_value {
-                        config.directory.path = PathBuf::from(dir_str);
-                    }
+                if let Some(dir_str) = dir.flatten() {
+                    config.directory.path = PathBuf::from(dir_str);
                 }
                 config.create_config_file().await?;
             } else {
@@ -50,7 +43,7 @@ async fn main() -> common::Result<()> {
                 let config_content = Config::init();
                 config_content.create_config_file().await?;
             }
-            let mut config_struct = Config::load_from_file().await?;
+            let config_struct = Config::load_from_file().await?;
             let path_exists = tokio::fs::try_exists(&config_struct.directory.path).await?;
             if !path_exists {
                 tokio::fs::create_dir_all(&config_struct.directory.path).await?;

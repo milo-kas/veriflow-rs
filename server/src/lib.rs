@@ -2,7 +2,7 @@ pub mod cli;
 pub mod config;
 pub mod server;
 pub const FILE_PATH: &str = "../Veriflow/resources/";
-pub const CONFIG_PATH: &str = "./config.toml";
+pub const CONFIG_PATH: &str = "./server/src/config.toml";
 #[cfg(test)]
 mod test {
     use crate::server::Listener;
