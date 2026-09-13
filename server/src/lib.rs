@@ -1,6 +1,3 @@
-use std::path::PathBuf;
-
-use serde::{Deserialize, Serialize};
 pub mod cli;
 pub mod config;
 pub mod server;

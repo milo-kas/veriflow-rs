@@ -47,7 +47,7 @@ async fn main() -> common::Result<()> {
                 if !path_exists {
                     tokio::fs::create_dir_all(server::FILE_PATH).await?;
                 }
-                let config_content = Config::default();
+                let config_content = Config::init();
                 config_content.create_config_file().await?;
             }
             let mut config_struct = Config::load_from_file().await?;

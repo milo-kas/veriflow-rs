@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-use crate::server;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
     pub network: Network,
@@ -20,7 +18,7 @@ pub struct Directory {
 }
 
 impl Config {
-    pub fn default() -> Self {
+    pub fn init() -> Self {
         Self {
             network: Network {
                 ip: "127.0.0.1".to_string(),
@@ -34,8 +32,8 @@ impl Config {
 
     pub fn new(ip: String, port: String, path: PathBuf) -> Self {
         Self {
-            network: Network { ip: ip, port: port },
-            directory: Directory { path: path },
+            network: Network { ip, port },
+            directory: Directory { path },
         }
     }
 
