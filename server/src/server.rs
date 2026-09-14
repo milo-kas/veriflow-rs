@@ -205,6 +205,12 @@ impl Listener {
             let str_header = serde_json::to_string(&header)?;
             connection.send_header(&str_header).await?;
         } else {
+            // Write sidecar
+            let sidecar_path = PathBuf::from(format!("{}.sha256", path.to_string_lossy()));
+            if let Err(e) = tokio::fs::write(&sidecar_path, &received_file_hash).await {
+                error!("Failed to write sidecar: {}", e)
+            }
+
             info!(
                 "File: {:?} successfuly received from User {:?}",
                 path.as_path().file_name(),
@@ -244,7 +250,18 @@ impl Listener {
         };
         let file_meta_data = fs::metadata(&path.as_path()).await?;
         let file_size = file_meta_data.len();
-        let file_hash = hashing::hash_file(path.as_path(), |_| {}).await?; // use saved .sha256 sidecar file in future
+
+        // Read sidecar hash
+        let sidecar_path = PathBuf::from(format!("{}.sha256", path.to_string_lossy()));
+        let file_hash = if fs::try_exists(&sidecar_path).await.unwrap_or(false) {
+            info!("Reading hash from sidecar for {:?}", filename);
+            fs::read_to_string(&sidecar_path).await?
+        } else {
+            info!("No sidecar found for {:?}, calculating hash...", filename);
+            let calculated_hash = hashing::hash_file(path.as_path(), |_| {}).await?;
+            let _ = fs::write(&sidecar_path, &calculated_hash).await;
+            calculated_hash
+        };
 
         let file_header = FileHeader::Upload {
             name: filename.clone(),
@@ -365,6 +382,10 @@ impl Listener {
         let result = if md.is_dir() {
             fs::remove_dir_all(&path).await
         } else {
+            // Delete sidecar if exists
+            let sidecar_path = PathBuf::from(format!("{}.sha256", path.to_string_lossy()));
+            let _ = fs::remove_file(&sidecar_path).await;
+
             fs::remove_file(&path).await
         };
 
