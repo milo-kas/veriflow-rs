@@ -23,6 +23,12 @@ target
 # config files
 *config.toml
 **/config.toml
+server.toml
+client.toml
 
 # files for testing
 **/test.txt
+
+
+# intelliJ IDEA
+.idea/

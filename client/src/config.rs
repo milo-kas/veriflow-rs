@@ -19,14 +19,14 @@ impl Default for ClientConfig {
         Self {
             ip: String::from("127.0.0.1"),
             port: String::from("8080"),
-            download_dir: PathBuf::from("../Veriflow/Downloads"),
+            download_dir: PathBuf::from("../Veriflow/downloads"),
         }
     }
 }
 
 impl ClientConfig {
     pub fn save(&self) -> Result<(), VeriflowError> {
-        self.save_to(Path::new("config.toml")) // default path
+        self.save_to(Path::new("client.toml")) // default path
     }
 
     // save configuration to path
@@ -39,7 +39,7 @@ impl ClientConfig {
     }
 
     pub fn load() -> Self {
-        Self::load_from(Path::new("config.toml")) // default path
+        Self::load_from(Path::new("client.toml")) // default path
     }
 
     // load configuration from path
@@ -89,7 +89,7 @@ mod tests {
 
         assert_eq!(config.ip, "127.0.0.1");
         assert_eq!(config.port, "8080");
-        assert_eq!(config.download_dir, PathBuf::from("../Veriflow/Downloads"));
+        assert_eq!(config.download_dir, PathBuf::from("../Veriflow/downloads"));
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn test_load_from_malformed_toml() -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempdir()?;
-        let path = dir.path().join("config.toml");
+        let path = dir.path().join("client.toml");
         std::fs::write(&path, "malformed...")?;
 
         let config = ClientConfig::load_from(&path);
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn test_load_from_partial_toml() -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempdir()?;
-        let path = dir.path().join("config.toml");
+        let path = dir.path().join("client.toml");
         std::fs::write(&path, "ip = \"164.100.1.1\"")?;
 
         let config = ClientConfig::load_from(&path);
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn test_load_from_missing_config_file() -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempdir()?;
-        let path = dir.path().join("config.toml");
+        let path = dir.path().join("client.toml");
         // verify the file does not exist
         assert!(!path.exists());
 
