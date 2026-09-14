@@ -206,7 +206,7 @@ impl Listener {
             connection.send_header(&str_header).await?;
         } else {
             // Write sidecar
-            let sidecar_path = PathBuf::from(format!({}.sha256), path.to_string_lossy());
+            let sidecar_path = PathBuf::from(format!("{}.sha256", path.to_string_lossy()));
             if let Err(e) = tokio::fs::write(&sidecar_path, &received_file_hash).await {
                 error!("Failed to write sidecar: {}", e)
             }
@@ -382,6 +382,10 @@ impl Listener {
         let result = if md.is_dir() {
             fs::remove_dir_all(&path).await
         } else {
+            // Delete sidecar if exists
+            let sidecar_path = PathBuf::from(format!("{}.sha256", path.to_string_lossy()));
+            let _ = fs::remove_file(&sidecar_path).await;
+
             fs::remove_file(&path).await
         };
 
