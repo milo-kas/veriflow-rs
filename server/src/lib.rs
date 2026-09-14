@@ -1,24 +1,8 @@
-use std::path::PathBuf;
-
-use serde::{Deserialize, Serialize};
+pub mod cli;
+pub mod config;
 pub mod server;
-
 pub const FILE_PATH: &str = "../Veriflow/resources/";
-pub const CONFIG_PATH: &str = "./config.toml";
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Config {
-    pub network: Network,
-    pub directory: Directory,
-}
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Network {
-    pub ip: String,
-    pub port: String,
-}
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Directory {
-    pub path: PathBuf,
-}
+pub const CONFIG_PATH: &str = "./server.toml";
 #[cfg(test)]
 mod test {
     use crate::server::Listener;
