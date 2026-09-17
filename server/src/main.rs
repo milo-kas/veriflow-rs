@@ -1,7 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use server::{cli::Args, cli::Commands, config::Config, server::Listener};
+use common::config::Config;
+use server::{cli::Args, cli::Commands, server::Listener};
 #[tokio::main]
 
 async fn main() -> common::Result<()> {
@@ -10,27 +11,27 @@ async fn main() -> common::Result<()> {
         Some(Commands::Config { ip, port, dir }) => {
             let config_exists = tokio::fs::try_exists(server::CONFIG_PATH).await?;
             if config_exists {
-                let mut config = Config::load_from_file().await?;
+                let mut config = Config::load_from(Path::new(server::CONFIG_PATH));
                 if let Some(ip_str) = ip.flatten() {
-                    config.network.ip = ip_str;
+                    config.ip = ip_str;
                 }
                 if let Some(port_str) = port.flatten() {
-                    config.network.port = port_str;
+                    config.port = port_str;
                 }
                 if let Some(dir_str) = dir.flatten() {
-                    config.directory.path = PathBuf::from(dir_str);
+                    config.resource_dir = PathBuf::from(dir_str);
                 }
-                config.create_config_file().await?;
+                config.save_to(Path::new(server::CONFIG_PATH))?;
             } else {
                 let ip_str = ip.and_then(|ip_value| ip_value);
                 let port_str = port.and_then(|port_value| port_value);
                 let dir_path = dir.and_then(|dir_value| dir_value.map(PathBuf::from));
-                let config = Config::new(
-                    ip_str.unwrap_or_else(|| "127.0.0.1".into()),
-                    port_str.unwrap_or_else(|| "8080".into()),
-                    dir_path.unwrap_or_else(|| PathBuf::from(server::FILE_PATH)),
-                );
-                config.create_config_file().await?;
+                let config = Config {
+                    ip: ip_str.unwrap_or_else(|| "127.0.0.1".into()),
+                    port: port_str.unwrap_or_else(|| "8080".into()),
+                    resource_dir: dir_path.unwrap_or_else(|| PathBuf::from(server::FILE_PATH)),
+                };
+                config.save_to(Path::new(server::CONFIG_PATH))?;
             }
         }
         None => {
@@ -40,18 +41,21 @@ async fn main() -> common::Result<()> {
                 if !path_exists {
                     tokio::fs::create_dir_all(server::FILE_PATH).await?;
                 }
-                let config_content = Config::init();
-                config_content.create_config_file().await?;
+                let config_content = Config {
+                    ip: "127.0.0.1".into(),
+                    port: "8080".into(),
+                    resource_dir: PathBuf::from(server::FILE_PATH),
+                };
+                config_content.save_to(Path::new(server::CONFIG_PATH))?;
             }
-            let config_struct = Config::load_from_file().await?;
-            let path_exists = tokio::fs::try_exists(&config_struct.directory.path).await?;
+            let config_struct = Config::load_from(Path::new(server::CONFIG_PATH));
+            let path_exists = tokio::fs::try_exists(&config_struct.resource_dir).await?;
             if !path_exists {
-                tokio::fs::create_dir_all(&config_struct.directory.path).await?;
+                tokio::fs::create_dir_all(&config_struct.resource_dir).await?;
             }
             tracing_subscriber::fmt::init();
-            let mut listener =
-                Listener::new(&config_struct.network.ip, &config_struct.network.port).await?;
-            listener.listen(config_struct.directory.path).await?;
+            let mut listener = Listener::new(&config_struct.ip, &config_struct.port).await?;
+            listener.listen(config_struct.resource_dir).await?;
         }
     }
     Ok(())

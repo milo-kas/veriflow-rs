@@ -1,30 +1,39 @@
 //! Client Config Struct
 
-use common::VeriflowError;
+use crate::VeriflowError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Network {
+    pub ip: String,
+    pub port: String,
+}
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Directory {
+    pub path: PathBuf,
+}
 // Config Struct
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)] // to only fill missing blanks
-pub struct ClientConfig {
+pub struct Config {
     pub ip: String,
     pub port: String,
-    pub download_dir: PathBuf,
+    pub resource_dir: PathBuf,
 }
 
 // Skeleton for the config file
-impl Default for ClientConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             ip: String::from("127.0.0.1"),
             port: String::from("8080"),
-            download_dir: PathBuf::from("../Veriflow/downloads"),
+            resource_dir: PathBuf::from("../Veriflow/downloads"),
         }
     }
 }
 
-impl ClientConfig {
+impl Config {
     pub fn save(&self) -> Result<(), VeriflowError> {
         self.save_to(Path::new("client.toml")) // default path
     }
@@ -85,16 +94,16 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = ClientConfig::default();
+        let config = Config::default();
 
         assert_eq!(config.ip, "127.0.0.1");
         assert_eq!(config.port, "8080");
-        assert_eq!(config.download_dir, PathBuf::from("../Veriflow/downloads"));
+        assert_eq!(config.resource_dir, PathBuf::from("../Veriflow/downloads"));
     }
 
     #[test]
     fn test_full_address_getter() {
-        let mut config = ClientConfig::default();
+        let mut config = Config::default();
         config.ip = "10001".to_string();
         config.port = "576".to_string();
 
@@ -108,23 +117,23 @@ mod tests {
 
         let test_ip = "164.100.1.1".to_string();
         let test_port = "4040".to_string();
-        let test_download_dir = PathBuf::from("tmp/some dir");
+        let test_resource_dir = PathBuf::from("tmp/some dir");
 
         // set custom config
-        let config = ClientConfig {
+        let config = Config {
             ip: test_ip,
             port: test_port,
-            download_dir: test_download_dir,
+            resource_dir: test_resource_dir,
         };
 
         // save
         config.save_to(&config_path)?;
 
         // load
-        let loaded_config = ClientConfig::load_from(&config_path);
+        let loaded_config = Config::load_from(&config_path);
         assert_eq!(loaded_config.ip, config.ip);
         assert_eq!(loaded_config.port, config.port);
-        assert_eq!(loaded_config.download_dir, config.download_dir);
+        assert_eq!(loaded_config.resource_dir, config.resource_dir);
 
         Ok(())
     }
@@ -135,12 +144,12 @@ mod tests {
         let path = dir.path().join("client.toml");
         std::fs::write(&path, "malformed...")?;
 
-        let config = ClientConfig::load_from(&path);
-        let default = ClientConfig::default();
+        let config = Config::load_from(&path);
+        let default = Config::default();
 
         assert_eq!(config.ip, default.ip);
         assert_eq!(config.port, default.port);
-        assert_eq!(config.download_dir, default.download_dir);
+        assert_eq!(config.resource_dir, default.resource_dir);
         Ok(())
     }
 
@@ -150,12 +159,12 @@ mod tests {
         let path = dir.path().join("client.toml");
         std::fs::write(&path, "ip = \"164.100.1.1\"")?;
 
-        let config = ClientConfig::load_from(&path);
-        let default = ClientConfig::default();
+        let config = Config::load_from(&path);
+        let default = Config::default();
 
         assert_eq!(config.ip, "164.100.1.1");
         assert_eq!(config.port, default.port);
-        assert_eq!(config.download_dir, default.download_dir);
+        assert_eq!(config.resource_dir, default.resource_dir);
         Ok(())
     }
 
@@ -166,12 +175,12 @@ mod tests {
         // verify the file does not exist
         assert!(!path.exists());
 
-        let config = ClientConfig::load_from(&path);
-        let default = ClientConfig::default();
+        let config = Config::load_from(&path);
+        let default = Config::default();
 
         assert_eq!(config.ip, default.ip);
         assert_eq!(config.port, default.port);
-        assert_eq!(config.download_dir, default.download_dir);
+        assert_eq!(config.resource_dir, default.resource_dir);
         Ok(())
     }
 }
