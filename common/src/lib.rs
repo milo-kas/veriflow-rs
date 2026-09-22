@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+pub mod config;
 pub mod hashing;
 pub mod protocol;
 use thiserror::Error;
