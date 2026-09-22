@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use common::config::Config;
+use common::config::ServerConfig;
 use server::{cli::Args, cli::Commands, server::Listener};
 #[tokio::main]
 
@@ -11,7 +11,7 @@ async fn main() -> common::Result<()> {
         Some(Commands::Config { ip, port, dir }) => {
             let config_exists = tokio::fs::try_exists(server::CONFIG_PATH).await?;
             if config_exists {
-                let mut config = Config::load_from(Path::new(server::CONFIG_PATH));
+                let mut config = ServerConfig::load_from(Path::new(server::CONFIG_PATH));
                 if let Some(ip_str) = ip.flatten() {
                     config.ip = ip_str;
                 }
@@ -26,7 +26,7 @@ async fn main() -> common::Result<()> {
                 let ip_str = ip.and_then(|ip_value| ip_value);
                 let port_str = port.and_then(|port_value| port_value);
                 let dir_path = dir.and_then(|dir_value| dir_value.map(PathBuf::from));
-                let config = Config {
+                let config = ServerConfig {
                     ip: ip_str.unwrap_or_else(|| "127.0.0.1".into()),
                     port: port_str.unwrap_or_else(|| "8080".into()),
                     resource_dir: dir_path.unwrap_or_else(|| PathBuf::from(server::FILE_PATH)),
@@ -41,14 +41,14 @@ async fn main() -> common::Result<()> {
                 if !path_exists {
                     tokio::fs::create_dir_all(server::FILE_PATH).await?;
                 }
-                let config_content = Config {
+                let config_content = ServerConfig {
                     ip: "127.0.0.1".into(),
                     port: "8080".into(),
                     resource_dir: PathBuf::from(server::FILE_PATH),
                 };
                 config_content.save_to(Path::new(server::CONFIG_PATH))?;
             }
-            let config_struct = Config::load_from(Path::new(server::CONFIG_PATH));
+            let config_struct = ServerConfig::load_from(Path::new(server::CONFIG_PATH));
             let path_exists = tokio::fs::try_exists(&config_struct.resource_dir).await?;
             if !path_exists {
                 tokio::fs::create_dir_all(&config_struct.resource_dir).await?;

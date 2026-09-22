@@ -11,7 +11,7 @@ async fn main() -> Result<(), VeriflowError> {
     let args = Args::parse();
 
     // Load config
-    let mut config = common::config::Config::load();
+    let mut config = common::config::ClientConfig::load();
 
     // Handle CLI arguments
     match args.command {
@@ -41,7 +41,7 @@ async fn main() -> Result<(), VeriflowError> {
 
             updated |= handle!(ip, ip, config.ip);
             updated |= handle!(port, port, config.port);
-            updated |= handle!(dir, resource_dir, config.resource_dir.display());
+            updated |= handle!(dir, download_dir, config.download_dir.display());
 
             if updated {
                 config.save()?;
@@ -68,7 +68,7 @@ async fn main() -> Result<(), VeriflowError> {
             } else if let Some(path) = download {
                 // Download
                 handle_result(
-                    transfer::download_file(&path, &target_ip, &config.resource_dir).await,
+                    transfer::download_file(&path, &target_ip, &config.download_dir).await,
                 );
             } else if let Some(path) = delete {
                 // Delete
