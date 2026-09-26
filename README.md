@@ -11,7 +11,18 @@ Start the server:
 ```bash
 cargo r -p server
 ```
-_Note: by default, the server listens on localhost; settings can be manually edited in the `server.toml` config file._ 
+_Note: by default, the server listens on localhost; settings can be manually edited in the `server.toml` config file._
+
+_Alternatively, configure the default ip, port (and resource dir) settings via (e.g.):_
+```bash
+cargo r -p server -- config --ip 0.0.0.0 --port 8080 --dir ./resources
+```
+
+More info:
+```bash
+cargo r -p server -- -h
+```
+
 
 ### Client
 Client commands (localhost is also default):
