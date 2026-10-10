@@ -1,5 +1,4 @@
 pub mod cli;
-pub mod config;
 pub mod server;
 pub const FILE_PATH: &str = "../Veriflow/resources/";
 pub const CONFIG_PATH: &str = "./server.toml";

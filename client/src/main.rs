@@ -2,7 +2,7 @@ use clap::Parser;
 use common::VeriflowError;
 
 use veriflow::cli::{Args, Commands};
-use veriflow::{config, transfer};
+use veriflow::transfer;
 
 // Start tokio engine
 #[tokio::main]
@@ -11,7 +11,7 @@ async fn main() -> Result<(), VeriflowError> {
     let args = Args::parse();
 
     // Load config
-    let mut config = config::ClientConfig::load();
+    let mut config = common::config::ClientConfig::load();
 
     // Handle CLI arguments
     match args.command {
